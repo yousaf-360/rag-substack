@@ -31,6 +31,7 @@ export class ChatController {
                         }
                     };
                 }
+                console.log(fullMessage);
                 return {
                     data: {
                         type: 'complete',

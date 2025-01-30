@@ -73,7 +73,7 @@ export class CrawlerService {
       const embeddings = [];
 
       await Promise.all(detailsData.map(async (item) => {
-        await this.openaiService.generateEmbeddings(item.link,item.content,embeddings);
+        await this.openaiService.generateEmbeddingsForWebsites(item.link,item.content,embeddings);
       }));
       console.log(embeddings);
       await Promise.all(

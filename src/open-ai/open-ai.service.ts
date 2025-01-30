@@ -15,10 +15,10 @@ export class OpenAiService {
   async generateResponse(prompt: string) {
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
-            role: 'user',
+            role: 'system',
             content: prompt,
           },
         ],
@@ -32,7 +32,20 @@ export class OpenAiService {
     }
   }
 
-  async generateEmbeddings(
+  async generateEmbeddingForUserQuery(query:string):Promise<number[]>{
+    try{
+      const response = await this.openai.embeddings.create({
+        model:'text-embedding-ada-002',
+        input:query
+      })
+      return response.data[0].embedding
+    }catch(error){
+      const e = error as Error;
+      throw new Error(`OpenAI API Error: ${e.message}`);
+    }
+  }
+
+  async generateEmbeddingsForWebsites(
     link: string,
     content: string,
     answer: Embedding[],
