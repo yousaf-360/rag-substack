@@ -4,7 +4,7 @@ import { CrawlerService } from './crawler.service';
 export class CrawlerController {
     constructor(private readonly crawlerService: CrawlerService) {}
     @Get('')
-    async scrape(@Query('cutoffDate') cutoffDate: Date) {
+    async scrape(@Query('cutoffDate') cutoffDate: Date):Promise<any> {
         return this.crawlerService.scrape(cutoffDate);
     }
 }
