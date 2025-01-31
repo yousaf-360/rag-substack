@@ -26,6 +26,19 @@ export class CrawlerService {
 
     try {
       const supabase = await this.supabaseService.getClient();
+
+      const { data: scrapedLinks, error: scrapedLinksError } = await supabase
+        .from('details')
+        .select('link')
+        .eq('is_processed', true);
+
+      if (scrapedLinksError) {
+        console.error('Supabase fetch error:', scrapedLinksError);
+        throw scrapedLinksError;
+      }
+
+      const scrapedLinksSet = new Set(scrapedLinks.map((item) => item.link));
+
       const { data, error } = await supabase.from('substack').select('id,link');
 
       if (error) {
@@ -43,6 +56,7 @@ export class CrawlerService {
             item.id,
             results,
             cutoffDate,
+            scrapedLinksSet,
           );
         }),
       );
@@ -103,7 +117,14 @@ export class CrawlerService {
     }
   }
 
-  private async scrapePage(browser, link, id, results, cutoffDate) {
+  private async scrapePage(
+    browser,
+    link,
+    id,
+    results,
+    cutoffDate,
+    scrapedLinksSet,
+  ) {
     const page = await browser.newPage();
     try {
       await page.setDefaultNavigationTimeout(60000);
@@ -163,66 +184,69 @@ export class CrawlerService {
         }
 
         for (const container of containers) {
-          const dateElement = await container.$('time');
-          const dateStr = await dateElement?.evaluate((el) =>
-            el.getAttribute('datetime'),
-          );
-          const articleDate = dateStr ? new Date(dateStr) : null;
-
-          if (articleDate && articleDate.getTime() < cutoffDate.getTime()) {
-            // await browser.close();
-            return Array.from(results);
-          }
-
-          const title = await container.$eval(
-            'a[data-testid="post-preview-title"]',
-            (el) => el.textContent.trim(),
-          );
-          const description = await container.$eval(
-            'a.color-primary-zABazT',
-            (el) => el.textContent.trim(),
-          );
           const link = await container.$eval(
             'a[data-testid="post-preview-title"]',
             (el) => el.href,
           );
+          if (!scrapedLinksSet.has(link)) {
+            const dateElement = await container.$('time');
 
-          const articlePage = await browser.newPage();
-          await articlePage.goto(link);
+            const dateStr = await dateElement?.evaluate((el) =>
+              el.getAttribute('datetime'),
+            );
+            const articleDate = dateStr ? new Date(dateStr) : null;
 
-          const selectors = [
-            'div.available-content',
-            '.available-content',
-            'body',
-          ];
-          let pageText = '';
-          for (const selector of selectors) {
-            try {
-              await articlePage.waitForSelector(selector, { timeout: 10000 });
-              pageText = await articlePage.$$eval(selector, (elements) =>
-                elements.map((el) => el.textContent.trim()).join('\n'),
-              );
-              break;
-            } catch (error) {
-              console.warn(`Selector ${selector} failed, trying next...`);
+            if (articleDate && articleDate.getTime() < cutoffDate.getTime()) {
+              // await browser.close();
+              return Array.from(results);
             }
+
+            const title = await container.$eval(
+              'a[data-testid="post-preview-title"]',
+              (el) => el.textContent.trim(),
+            );
+            const description = await container.$eval(
+              'a.color-primary-zABazT',
+              (el) => el.textContent.trim(),
+            );
+
+            const articlePage = await browser.newPage();
+            await articlePage.goto(link);
+
+            const selectors = [
+              'div.available-content',
+              '.available-content',
+              'body',
+            ];
+            let pageText = '';
+            for (const selector of selectors) {
+              try {
+                await articlePage.waitForSelector(selector, { timeout: 10000 });
+                pageText = await articlePage.$$eval(selector, (elements) =>
+                  elements.map((el) => el.textContent.trim()).join('\n'),
+                );
+                break;
+              } catch (error) {
+                console.warn(`Selector ${selector} failed, trying next...`);
+              }
+            }
+
+            // const imageUrls = await articlePage.$$eval(
+            //   '.available-content img',
+            //   (imgs) => imgs.map((img) => img.src),
+            // );
+
+            await articlePage.close();
+            console.log('info : ', link);
+            results.add({
+              title,
+              description,
+              link,
+              articleDate,
+              pageText,
+              id,
+            });
           }
-
-          // const imageUrls = await articlePage.$$eval(
-          //   '.available-content img',
-          //   (imgs) => imgs.map((img) => img.src),
-          // );
-
-          await articlePage.close();
-          console.log('info : ', link);
-          results.add({
-            title,
-            description,
-            link,
-            articleDate,
-            pageText,
-            id,
-          });
         }
 
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
