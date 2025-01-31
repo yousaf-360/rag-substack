@@ -72,7 +72,7 @@ export class CrawlerService {
         title: item.title,
         description: item.description,
         content: item.pageText,
-        is_processed: true,
+        is_processed: item.is_processed,
         reference_id: item.id,
       }));
 
@@ -219,13 +219,18 @@ export class CrawlerService {
               'body',
             ];
             let pageText = '';
+            let is_processed = false;
             for (const selector of selectors) {
               try {
                 await articlePage.waitForSelector(selector, { timeout: 10000 });
                 pageText = await articlePage.$$eval(selector, (elements) =>
                   elements.map((el) => el.textContent.trim()).join('\n'),
                 );
-                break;
+                if (pageText.length > 100) {
+                  is_processed = true;
+                }
+                  break;
+
               } catch (error) {
                 console.warn(`Selector ${selector} failed, trying next...`);
               }
@@ -245,6 +250,7 @@ export class CrawlerService {
               articleDate,
               pageText,
               id,
+              is_processed,
             });
           }
         }
